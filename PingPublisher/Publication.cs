@@ -95,6 +95,7 @@ namespace allmhuran.PingPublisher
          }
 
          _sw.Stop();
+         await Task.WhenAll(pings.Select(p => p.tcs.Task));
          _output.Writer.Complete();
          await _output.Reader.Completion;
 
@@ -111,8 +112,8 @@ namespace allmhuran.PingPublisher
             var result = e.CorrelationKey as PingResult ?? throw new Exception("wha?");
             result.ms = _sw.ElapsedMilliseconds - result.ms;
             result.tcs.SetResult(e.Event == SessionEvent.Acknowledgement);
-            _sem.Release();
             _output.Writer.TryWrite(result.id);
+            _sem.Release();
          }
       }
 
