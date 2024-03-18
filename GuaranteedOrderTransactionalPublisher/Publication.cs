@@ -106,7 +106,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
 
       /// <summary>
       /// indicate that we will not publish any further messages, and wait for all currently
-      /// enqueued messages to be comitted
+      /// enqueued messages to be committed
       /// </summary>
       public void Complete()
       {
