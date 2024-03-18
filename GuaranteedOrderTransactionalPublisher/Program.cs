@@ -14,12 +14,12 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
          var sub = new Subscription(vpn, host, userName, password, "topic1");
          var pub = new Publication(vpn, host, userName, password, "topic1");
 
-         int countToPublish = 20000;
+         int countToPublish = 10000;
          Console.WriteLine($"publishing {countToPublish}");
          for (int i = 1; i <= countToPublish; i++) await pub.Enqueue(i);
          pub.Complete();
          Console.WriteLine("draining...");
-         CancellationTokenSource cts = new(TimeSpan.FromSeconds(5));
+         CancellationTokenSource cts = new(TimeSpan.FromSeconds(8));
          int last = 0;
          try
          {

@@ -40,7 +40,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
             UserName = userName,
             Password = password,
             SSLValidateCertificate = false, // required due to our broker config
-            ADPublishWindowSize = 200
+            ADPublishWindowSize = COMMIT_SIZE
          };
 
          var session = context.CreateSession(sprops, null, (s, e) => Console.WriteLine($"{e.Event} {e.ResponseCode}"));
@@ -50,7 +50,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
 
          _ringFreeBuffer = Channel.CreateBounded<IMessage>
          (
-            new BoundedChannelOptions(RINGBUFFERSIZE)
+            new BoundedChannelOptions(COMMIT_SIZE + 1)
             {
                FullMode = BoundedChannelFullMode.Wait,
                SingleReader = true,
@@ -60,7 +60,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
 
          var topic = ContextFactory.Instance.CreateTopic(topicName);
 
-         for (int i = 0; i < RINGBUFFERSIZE; i++)
+         for (int i = 0; i < COMMIT_SIZE + 1; i++)
          {
             var message = ContextFactory.Instance.CreateMessage();
             message.Destination = topic;
@@ -72,7 +72,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
 
          _ringFullBuffer = Channel.CreateBounded<IMessage>
          (
-            new BoundedChannelOptions(RINGBUFFERSIZE)
+            new BoundedChannelOptions(COMMIT_SIZE + 1)
             {
                FullMode = BoundedChannelFullMode.Wait,
                SingleReader = true,
@@ -129,9 +129,9 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
          var sw = new Stopwatch();
          var results = new List<long>();
          int totalCount = 0;
-         IMessage?[] commitBatch = new IMessage[199];
+         IMessage?[] commitBatch = new IMessage[COMMIT_SIZE];
          sw.Start();
-         // ringtail.reader is the read head of the circular message buffer, containing enqueued
+         // this is the read head of the circular message buffer, containing enqueued
          // messages. This task will become true when a message becomes available, or false when the
          // channel writer is completed
          while (await _ringFullBuffer.Reader.WaitToReadAsync())
@@ -179,7 +179,8 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
             } while (retry);
 
             // batch committed, put messages back into free list
-            for (j = 0; j < i; j++) { _ringFreeBuffer.Writer.TryWrite(commitBatch[j]!); }
+            for (j = 0; j < i; j++) _ringFreeBuffer.Writer.TryWrite(commitBatch[j]!);
+
             totalCount += i;
          }
          sw.Stop();
@@ -191,7 +192,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
          Console.WriteLine($"stdev commit ms = {results.StdDev(),6:F2}");
       }
 
-      private const int RINGBUFFERSIZE = 201;
+      private const int COMMIT_SIZE = 200;
       private readonly IBrowser _lvq;
       private readonly IMessage _lvqMessage;
       private readonly Task _publishing;
