@@ -71,7 +71,16 @@ namespace allmhuran.PingPublisher
 
          _sem = new SemaphoreSlim(maxUnacked, maxUnacked);
          _output = Channel.CreateUnbounded<int>();
-         _ = Task.Run(async () => { await foreach (var i in _output.Reader.ReadAllAsync()) if (i % 10 == 0) Console.WriteLine(i); });
+         _ = Task.Run
+         (
+            async () =>
+            {
+               await foreach (var i in _output.Reader.ReadAllAsync())
+               {
+                  if (i % 10 == 0) Console.WriteLine($"published msg {i}");
+               }
+            }
+         );
 
          _sw.Reset();
          _sw.Start();

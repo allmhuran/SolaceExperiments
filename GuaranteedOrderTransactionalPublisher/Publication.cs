@@ -132,7 +132,8 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
          IMessage?[] commitBatch = new IMessage[199];
          sw.Start();
          // ringtail.reader is the read head of the circular message buffer, containing enqueued
-         // messages. This task will complete when a message becomes available
+         // messages. This task will become true when a message becomes available, or false when the
+         // channel writer is completed
          while (await _ringFullBuffer.Reader.WaitToReadAsync())
          {
             int retryDelayMs = 10, i = 0, j;
