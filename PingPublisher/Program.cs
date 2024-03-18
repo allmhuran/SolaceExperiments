@@ -10,7 +10,7 @@
          var password = args.Length > 3 ? args[3] : Environment.GetEnvironmentVariable("solace.dev.password", EnvironmentVariableTarget.User);
 
          var pub = new Publication(vpn, host, userName, password);
-         await pub.Ping(count: 1000, concurrentCount: 50, publishWindowSize: 50);
+         await pub.Ping(count: 2048, maxUnacked: 128, publishWindowSize: 128);
       }
    }
 }

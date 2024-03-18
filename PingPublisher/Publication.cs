@@ -34,7 +34,7 @@ namespace allmhuran.PingPublisher
          _password = password;
       }
 
-      public async Task Ping(int count, int concurrentCount = 1, int publishWindowSize = 1)
+      public async Task Ping(int count, int maxUnacked = 1, int publishWindowSize = 1)
       {
          // connect
          var cfp = new ContextFactoryProperties() { SolClientLogLevel = SolLogLevel.Warning };
@@ -69,7 +69,7 @@ namespace allmhuran.PingPublisher
             pings[i] = new PingResult { id = i + 1 };
          }
 
-         _sem = new SemaphoreSlim(concurrentCount, concurrentCount);
+         _sem = new SemaphoreSlim(maxUnacked, maxUnacked);
          _output = Channel.CreateUnbounded<int>();
          _ = Task.Run(async () => { await foreach (var i in _output.Reader.ReadAllAsync()) if (i % 10 == 0) Console.WriteLine(i); });
 
@@ -101,7 +101,7 @@ namespace allmhuran.PingPublisher
          {
             var result = e.CorrelationKey as PingResult ?? throw new Exception("wha?");
             result.ms = _sw.ElapsedMilliseconds - result.ms;
-            result.tcs.SetResult(e.Event == SessionEvent.Acknowledgement ? true : false);
+            result.tcs.SetResult(e.Event == SessionEvent.Acknowledgement);
             _sem.Release();
             _output.Writer.TryWrite(result.id);
          }

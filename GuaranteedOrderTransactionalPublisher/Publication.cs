@@ -24,7 +24,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
             UserName = userName,
             Password = password,
             SSLValidateCertificate = false, // required due to our broker config
-            ADPublishWindowSize = 50
+            ADPublishWindowSize = 128
          };
 
          var session = context.CreateSession(sprops, null, (s, e) => Console.WriteLine($"{e.Event} {e.ResponseCode}"));
@@ -116,7 +116,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
 
       private async Task PublishAsync()
       {
-         IMessage?[] commitBatch = new IMessage[250];
+         IMessage?[] commitBatch = new IMessage[128];
          _sw.Start();
          _commitMs.Clear();
          // ringtail.reader is the read head of the circular message buffer, containing enqueued
