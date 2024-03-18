@@ -5,6 +5,22 @@ using System.Threading.Channels;
 
 namespace allmhuran.GuaranteedOrderTransactionalPublisher
 {
+   public static class Extensions
+   {
+      public static double StdDev(this IEnumerable<long> values)
+      {
+         double ret = 0;
+         int count = values.Count();
+         if (count > 1)
+         {
+            double avg = values.Average();
+            double sum = values.Sum(d => (d - avg) * (d - avg));
+            ret = Math.Sqrt(sum / count);
+         }
+         return ret;
+      }
+   }
+
    public class Publication
    {
       /// <summary>
@@ -24,7 +40,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
             UserName = userName,
             Password = password,
             SSLValidateCertificate = false, // required due to our broker config
-            ADPublishWindowSize = 128
+            ADPublishWindowSize = 200
          };
 
          var session = context.CreateSession(sprops, null, (s, e) => Console.WriteLine($"{e.Event} {e.ResponseCode}"));
@@ -108,17 +124,13 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
          if (!_ringFullBuffer.Writer.TryWrite(msg)) throw new Exception("impossible");
       }
 
-      public void Report()
-      {
-         var avgCommitMs = _commitMs.Average(l => l);
-         Console.WriteLine($"average commit ms = {avgCommitMs:F2}");
-      }
-
       private async Task PublishAsync()
       {
-         IMessage?[] commitBatch = new IMessage[128];
-         _sw.Start();
-         _commitMs.Clear();
+         var sw = new Stopwatch();
+         var results = new List<long>();
+         int totalCount = 0;
+         IMessage?[] commitBatch = new IMessage[199];
+         sw.Start();
          // ringtail.reader is the read head of the circular message buffer, containing enqueued
          // messages. This task will complete when a message becomes available
          while (await _ringFullBuffer.Reader.WaitToReadAsync())
@@ -140,9 +152,9 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
 
                try
                {
-                  long ms = _sw.ElapsedMilliseconds;
+                  long ms = sw.ElapsedMilliseconds;
                   _transactedSession.Commit();
-                  _commitMs.Add(_sw.ElapsedMilliseconds - ms);
+                  results.Add(sw.ElapsedMilliseconds - ms);
                }
                catch (OperationErrorException x)
                {
@@ -166,18 +178,24 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
             } while (retry);
 
             // batch committed, put messages back into free list
-            for (j = 0; j < i; j++) _ringFreeBuffer.Writer.TryWrite(commitBatch[j]!);
+            for (j = 0; j < i; j++) { _ringFreeBuffer.Writer.TryWrite(commitBatch[j]!); }
+            totalCount += i;
          }
+         sw.Stop();
+         var seconds = sw.Elapsed.TotalSeconds;
+         Console.WriteLine($"published {totalCount} messages in {seconds:F2} seconds at {totalCount / seconds:F2} msgs/sec");
+         Console.WriteLine($"avg commit ms   = {results.Average(),6:F2}");
+         Console.WriteLine($"min commit ms   = {results.Min(),6:F2}");
+         Console.WriteLine($"max commit ms   = {results.Max(),6:F2}");
+         Console.WriteLine($"stdev commit ms = {results.StdDev(),6:F2}");
       }
 
-      private const int RINGBUFFERSIZE = 500;
+      private const int RINGBUFFERSIZE = 201;
       private readonly IBrowser _lvq;
       private readonly IMessage _lvqMessage;
       private readonly Task _publishing;
       private readonly Channel<IMessage> _ringFreeBuffer;
       private readonly Channel<IMessage> _ringFullBuffer;
       private readonly ITransactedSession _transactedSession;
-      private List<long> _commitMs = new List<long>();
-      private Stopwatch _sw = new Stopwatch();
    }
 }

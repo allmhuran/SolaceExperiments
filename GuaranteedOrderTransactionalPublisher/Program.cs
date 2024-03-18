@@ -14,15 +14,11 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
          var sub = new Subscription(vpn, host, userName, password, "topic1");
          var pub = new Publication(vpn, host, userName, password, "topic1");
 
-         var stopwatch = new Stopwatch();
-         int countToPublish = 10000;
-         int i;
-         stopwatch.Start();
-         for (i = 0; i < countToPublish; i++) await pub.Enqueue(i);
+         int countToPublish = 20000;
+         Console.WriteLine($"publishing {countToPublish}");
+         for (int i = 1; i <= countToPublish; i++) await pub.Enqueue(i);
          pub.Complete();
-         stopwatch.Stop();
-         var t = stopwatch.Elapsed.TotalSeconds;
-
+         Console.WriteLine("draining...");
          CancellationTokenSource cts = new(TimeSpan.FromSeconds(5));
          int last = 0;
          try
@@ -31,9 +27,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
          }
          catch (OperationCanceledException) { }
 
-         Console.WriteLine($"published {countToPublish} messages in {t} seconds at {countToPublish * 1f / t:F2} msgs/sec");
          Console.WriteLine($"last payload received was {last}");
-         pub.Report();
          Console.WriteLine("any key to exit");
          Console.ReadKey();
       }
