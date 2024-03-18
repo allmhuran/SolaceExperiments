@@ -26,10 +26,13 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
             SSLValidateCertificate = false, // required due to our broker config
             ADPublishWindowSize = 50
          };
+
          var session = context.CreateSession(sprops, null, (s, e) => Console.WriteLine($"{e.Event} {e.ResponseCode}"));
          session.Connect();
+
          _transactedSession = session.CreateTransactedSession(new());
-         _ringHead = Channel.CreateBounded<IMessage>
+
+         _ringFreeBuffer = Channel.CreateBounded<IMessage>
          (
             new BoundedChannelOptions(RINGBUFFERSIZE)
             {
@@ -38,7 +41,9 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
                SingleWriter = true
             }
          );
+
          var topic = ContextFactory.Instance.CreateTopic(topicName);
+
          for (int i = 0; i < RINGBUFFERSIZE; i++)
          {
             var message = ContextFactory.Instance.CreateMessage();
@@ -46,10 +51,10 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
             message.DeliveryMode = MessageDeliveryMode.Persistent;
             message.TimeToLive = (long)TimeSpan.FromMinutes(10).TotalMilliseconds;
             message.BinaryAttachment = new byte[4];
-            _ringHead.Writer.TryWrite(message);
+            _ringFreeBuffer.Writer.TryWrite(message);
          }
 
-         _ringTail = Channel.CreateBounded<IMessage>
+         _ringFullBuffer = Channel.CreateBounded<IMessage>
          (
             new BoundedChannelOptions(RINGBUFFERSIZE)
             {
@@ -58,7 +63,9 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
                SingleWriter = true
             }
          );
+
          var lvq = ContextFactory.Instance.CreateQueue(topic.Name + "/LVQ");
+
          session.Provision
          (
             lvq,
@@ -89,16 +96,16 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
       {
          // completing this writer will cause PublishAsync to exit once it finishes publishing
          // anything that has been enqueued
-         _ringTail.Writer.Complete();
+         _ringFullBuffer.Writer.Complete();
          _publishing.GetAwaiter().GetResult();
       }
 
       public async Task Enqueue(int payload)
       {
-         var msg = await _ringHead.Reader.ReadAsync();
+         var msg = await _ringFreeBuffer.Reader.ReadAsync();
          msg.SequenceNumber = payload;
          msg.BinaryAttachment = BitConverter.GetBytes(payload);
-         if (!_ringTail.Writer.TryWrite(msg)) throw new Exception("impossible");
+         if (!_ringFullBuffer.Writer.TryWrite(msg)) throw new Exception("impossible");
       }
 
       public void Report()
@@ -114,13 +121,13 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
          _commitMs.Clear();
          // ringtail.reader is the read head of the circular message buffer, containing enqueued
          // messages. This task will complete when a message becomes available
-         while (await _ringTail.Reader.WaitToReadAsync())
+         while (await _ringFullBuffer.Reader.WaitToReadAsync())
          {
             int retryDelayMs = 10, i = 0, j;
             bool retry = false;
 
-            // grab messages until we fill the batch or there are no more immediately available
-            while (i < commitBatch.Length && _ringTail.Reader.TryRead(out commitBatch[i])) i++;
+            // grab enqueued messages until we fill the batch or there are no more immediately available
+            while (i < commitBatch.Length && _ringFullBuffer.Reader.TryRead(out commitBatch[i])) i++;
 
             do
             {
@@ -159,7 +166,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
             } while (retry);
 
             // batch committed, put messages back into free list
-            for (j = 0; j < i; j++) _ringHead.Writer.TryWrite(commitBatch[j]!);
+            for (j = 0; j < i; j++) _ringFreeBuffer.Writer.TryWrite(commitBatch[j]!);
          }
       }
 
@@ -167,9 +174,8 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
       private readonly IBrowser _lvq;
       private readonly IMessage _lvqMessage;
       private readonly Task _publishing;
-      // head and tail of the message ringbuffer
-      private readonly Channel<IMessage> _ringHead;
-      private readonly Channel<IMessage> _ringTail;
+      private readonly Channel<IMessage> _ringFreeBuffer;
+      private readonly Channel<IMessage> _ringFullBuffer;
       private readonly ITransactedSession _transactedSession;
       private List<long> _commitMs = new List<long>();
       private Stopwatch _sw = new Stopwatch();
