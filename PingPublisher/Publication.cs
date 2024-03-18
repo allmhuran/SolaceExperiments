@@ -102,7 +102,7 @@ namespace allmhuran.PingPublisher
          var avgMs = pings.Average(x => x.ms);
          var stdev = pings.Select(x => x.ms).StdDev();
          var loss = pings.Average(p => p.tcs.Task.Result ? 0.0 : 1.0);
-         Console.WriteLine($"Count = {pings.Length} avg = {avgMs}ms stdev = {stdev:F2}ms loss = {loss:P1} rate = {1000.0 * pings.Length / _sw.ElapsedMilliseconds:F3}msgs/sec");
+         Console.WriteLine($"Count = {pings.Length} avg = {avgMs:F2}ms stdev = {stdev:F2}ms loss = {loss:P1} rate = {1000.0 * pings.Length / _sw.ElapsedMilliseconds:F2}msgs/sec");
       }
 
       private void OnSessionEvent(object? sender, SessionEventArgs e)
