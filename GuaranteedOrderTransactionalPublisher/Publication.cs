@@ -1,5 +1,6 @@
 ﻿using SolaceSystems.Solclient.Messaging;
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Threading.Channels;
 
 namespace allmhuran.GuaranteedOrderTransactionalPublisher
@@ -23,7 +24,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
             UserName = userName,
             Password = password,
             SSLValidateCertificate = false, // required due to our broker config
-            ADPublishWindowSize = 200
+            ADPublishWindowSize = 50
          };
          var session = context.CreateSession(sprops, null, (s, e) => Console.WriteLine($"{e.Event} {e.ResponseCode}"));
          session.Connect();
@@ -100,10 +101,17 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
          if (!_ringTail.Writer.TryWrite(msg)) throw new Exception("impossible");
       }
 
+      public void Report()
+      {
+         var avgCommitMs = _commitMs.Average(l => l);
+         Console.WriteLine($"average commit ms = {avgCommitMs:F2}");
+      }
+
       private async Task PublishAsync()
       {
-         IMessage?[] commitBatch = new IMessage[200];
-
+         IMessage?[] commitBatch = new IMessage[250];
+         _sw.Start();
+         _commitMs.Clear();
          // ringtail.reader is the read head of the circular message buffer, containing enqueued
          // messages. This task will complete when a message becomes available
          while (await _ringTail.Reader.WaitToReadAsync())
@@ -125,7 +133,9 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
 
                try
                {
+                  long ms = _sw.ElapsedMilliseconds;
                   _transactedSession.Commit();
+                  _commitMs.Add(_sw.ElapsedMilliseconds - ms);
                }
                catch (OperationErrorException x)
                {
@@ -161,5 +171,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
       private readonly Channel<IMessage> _ringHead;
       private readonly Channel<IMessage> _ringTail;
       private readonly ITransactedSession _transactedSession;
+      private List<long> _commitMs = new List<long>();
+      private Stopwatch _sw = new Stopwatch();
    }
 }

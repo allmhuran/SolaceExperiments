@@ -15,7 +15,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
          var pub = new Publication(vpn, host, userName, password, "topic1");
 
          var stopwatch = new Stopwatch();
-         int countToPublish = 5000;
+         int countToPublish = 10000;
          int i;
          stopwatch.Start();
          for (i = 0; i < countToPublish; i++) await pub.Enqueue(i);
@@ -33,6 +33,7 @@ namespace allmhuran.GuaranteedOrderTransactionalPublisher
 
          Console.WriteLine($"published {countToPublish} messages in {t} seconds at {countToPublish * 1f / t:F2} msgs/sec");
          Console.WriteLine($"last payload received was {last}");
+         pub.Report();
          Console.WriteLine("any key to exit");
          Console.ReadKey();
       }
