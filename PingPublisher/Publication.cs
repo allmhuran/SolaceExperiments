@@ -94,8 +94,8 @@ namespace allmhuran.PingPublisher
             if (session.Send(messages[i]) != ReturnCode.SOLCLIENT_OK) throw new Exception("send failure");
          }
 
-         _sw.Stop();
          await Task.WhenAll(pings.Select(p => p.tcs.Task));
+         _sw.Stop();         
          _output.Writer.Complete();
          await _output.Reader.Completion;
 
