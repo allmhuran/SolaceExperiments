@@ -88,9 +88,9 @@ namespace allmhuran.PingPublisher
          // send
          for (int i = 0; i < count; i++)
          {
+            _sem.Wait();            
             pings[i].ms = _sw.ElapsedMilliseconds;
             messages[i].CorrelationKey = pings[i];
-            _sem.Wait();
             if (session.Send(messages[i]) != ReturnCode.SOLCLIENT_OK) throw new Exception("send failure");
          }
 
